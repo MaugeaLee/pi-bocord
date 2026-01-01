@@ -3,6 +3,8 @@ from picamera2.encoders import Quality, H264Encoder
 import time
 import cv2
 import signal
+from datetime import datetime
+CURRENT_TIME = datetime.now().strftime("%Y%m%d")
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -12,6 +14,8 @@ WIDTH=1920
 HEIGHT=1080
 FPS = 60
 BITRATE=10000 # x264 에서는 kbit 단위로 명시
+MAX_SIZE_TIME_NS = 20 * (10 ** 9)
+
 
 GSTREAMER_PIPELINE = (
     # 1. appsrc: RAW 프레임을 받음
@@ -22,16 +26,19 @@ GSTREAMER_PIPELINE = (
     'videoconvert ! video/x-raw,format=I420 ! '
 
     # 3. 인코딩: H.264로 압축
-    f'x264enc tune=zerolatency bitrate={BITRATE} ! '
+    f'x264enc speed-preset=veryfast tune=zerolatency bitrate={BITRATE} ! '
 
     # 4. h264parse: 스트림에 필요한 메타데이터 추가
     'h264parse ! '
 
+    f'splitmuxsink location=temp/segment_{CURRENT_TIME}_%05d.mp4 max-size-time={MAX_SIZE_TIME_NS} '
+    'muxer=mp4mux'
+
     # 5. mp4mux: MP4 컨테이너에 H.264 스트림을 패키징
-    'mp4mux name=mux ! '
+    # 'mp4mux name=mux ! '
 
     # 6. filesink 지정된 파일 이름으로 저장
-    'filesink location=stream_record.mp4'
+    # 'filesink location=temp/stream_record.mp4'
 )
 
 def record():
@@ -42,7 +49,7 @@ def record():
     config = picam2.create_video_configuration(main={"size": (WIDTH, HEIGHT), "format": "YUV420"})
     picam2.configure(config)
     picam2.set_controls({'FrameRate': FPS})
-    # picam2.set_controls({'AfMode': 2}) # 0=Manual, 1=Auto, 2=Continuous
+    picam2.set_controls({'AfMode': 2}) # 0=Manual, 1=Auto, 2=Continuous
     picam2.start()
     print("[Camera] Picamera2 세션 시작 완료 !")
 
